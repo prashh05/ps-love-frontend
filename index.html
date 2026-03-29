@@ -76,7 +76,9 @@
     .upload-hint span{background:var(--deep);color:white;padding:0.45rem 1rem;border-radius:100px;font-size:0.75rem;letter-spacing:0.08em}
     .photo-card:hover .upload-hint{opacity:1}
     input[type="file"]{display:none}
-    .gallery-hint{text-align:center;margin-top:1.5rem;font-size:0.78rem;color:var(--muted);letter-spacing:0.05em}
+    .gallery-hint{text-align:center;margin-top:1rem;font-size:0.78rem;color:var(--muted);letter-spacing:0.05em}
+    .add-more-btn{display:block;margin:1.5rem auto 0;background:var(--deep);color:white;border:none;border-radius:100px;padding:0.85rem 2.2rem;font-family:'DM Sans',sans-serif;font-size:0.9rem;letter-spacing:0.08em;cursor:pointer;transition:background 0.3s,transform 0.15s;touch-action:manipulation}
+    .add-more-btn:active{transform:scale(0.96);background:var(--rose)}
 
     /* Upload loading overlay */
     .card-loading{position:absolute;inset:0;background:rgba(255,248,249,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.6rem;border-radius:14px;z-index:10}
@@ -132,10 +134,8 @@
 </head>
 <body>
 
-<!-- !! IMPORTANT: Replace this with your Render backend URL after deploying !! -->
 <script>
   const API = 'https://ps-love-backend.onrender.com';
-  // Example: const API = 'https://ps-love-backend.onrender.com';
 </script>
 
 <!-- SPLASH -->
@@ -191,6 +191,7 @@
   <p class="section-label reveal">Our Memories</p>
   <h2 class="section-title reveal">Our little gallery 📸</h2>
   <div class="gallery-grid" id="galleryGrid"></div>
+  <button class="add-more-btn" onclick="addNewCard()">+ Add More Photos</button>
   <p class="gallery-hint reveal">Tap any frame to add a photo ✨</p>
 </section>
 
@@ -231,7 +232,7 @@
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">P &amp; S 💕</div>
-  <p class="footer-text"></p>
+  <p class="footer-text">Made with love by Prashaant, just for Samruthaa · March 2026</p>
 </footer>
 
 <script>
@@ -277,25 +278,32 @@ function closeMenu(){
   document.body.style.overflow='';
 }
 
-/* ── GALLERY ── */
-const captions=['Us 🌸','My favourite smile 💕','This day ✨','Always & forever 🌹','Just us 💖','Best memory 🌷'];
+/* ── GALLERY (unlimited) ── */
+const defaultCaptions=['Us 🌸','My favourite smile 💕','This day ✨','Always & forever 🌹','Just us 💖','Best memory 🌷'];
+const extraCaptions=['Together 💗','Our world 🌍','Golden moment ✨','Forever 💫','My person 🌹','Always you 💕','Happiness 🌸','Perfect day 🌷'];
 const grid=document.getElementById('galleryGrid');
 const cards=[];
+let nextSlot=0;
 
-// Build 6 empty cards first
-captions.forEach((cap,i)=>{
+function getCaption(i){
+  if(i < defaultCaptions.length) return defaultCaptions[i];
+  return extraCaptions[(i - defaultCaptions.length) % extraCaptions.length];
+}
+
+function createCard(slotIndex, existingUrl=null){
+  const i=slotIndex;
   const card=document.createElement('div'); card.className='photo-card';
+  card.dataset.slot=i;
   card.innerHTML=`
     <input type="file" accept="image/*" id="file-${i}"/>
     <div class="photo-placeholder"><div class="icon">📷</div><p>Tap to add</p></div>
     <div class="upload-hint"><span>+ Add Photo</span></div>
-    <div class="photo-caption">${cap}</div>
+    <div class="photo-caption">${getCaption(i)}</div>
     <button class="delete-btn" title="Remove photo">✕</button>`;
 
   card.addEventListener('touchstart',()=>card.classList.add('touched'),{passive:true});
   card.addEventListener('touchend',()=>setTimeout(()=>card.classList.remove('touched'),1400),{passive:true});
 
-  // Click: open lightbox if has photo, else trigger file picker
   card.addEventListener('click', e=>{
     if(e.target.closest('.delete-btn')) return;
     const img=card.querySelector('img');
@@ -303,7 +311,6 @@ captions.forEach((cap,i)=>{
     card.querySelector('input').click();
   });
 
-  // File chosen → upload to backend
   card.querySelector('input').addEventListener('change', async e=>{
     const file=e.target.files[0]; if(!file) return;
     showLoading(card, true);
@@ -321,22 +328,35 @@ captions.forEach((cap,i)=>{
     }
   });
 
-  // Delete button
   card.querySelector('.delete-btn').addEventListener('click', async e=>{
     e.stopPropagation();
     if(!confirm('Remove this photo?')) return;
     showLoading(card, true);
     try {
       await fetch(`${API}/photos/${i}`, {method:'DELETE'});
-      clearCardPhoto(card);
+      card.remove();
+      cards[i]=null;
       showToast('Photo removed 🌸');
     } catch(err){ showToast('Error removing photo'); }
     finally { showLoading(card, false); }
   });
 
   grid.appendChild(card);
-  cards.push(card);
-});
+  cards[i]=card;
+  if(existingUrl) setCardPhoto(card, existingUrl);
+  return card;
+}
+
+// Build first 6 empty cards
+for(let i=0;i<6;i++){ createCard(i); nextSlot=i+1; }
+
+// Add More button
+function addNewCard(){
+  const card=createCard(nextSlot);
+  nextSlot++;
+  card.querySelector('input').click();
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+}
 
 function setCardPhoto(card, url){
   card.querySelector('.photo-placeholder')?.remove();
@@ -344,20 +364,6 @@ function setCardPhoto(card, url){
   let img=card.querySelector('img');
   if(!img){ img=document.createElement('img'); card.prepend(img); }
   img.src=url;
-}
-
-function clearCardPhoto(card){
-  card.querySelector('img')?.remove();
-  if(!card.querySelector('.photo-placeholder')){
-    const ph=document.createElement('div'); ph.className='photo-placeholder';
-    ph.innerHTML='<div class="icon">📷</div><p>Tap to add</p>';
-    card.prepend(ph);
-  }
-  if(!card.querySelector('.upload-hint')){
-    const uh=document.createElement('div'); uh.className='upload-hint';
-    uh.innerHTML='<span>+ Add Photo</span>';
-    card.insertBefore(uh, card.querySelector('.photo-caption'));
-  }
 }
 
 function showLoading(card, show){
@@ -373,13 +379,18 @@ function showLoading(card, show){
   }
 }
 
-// Load all saved photos from backend on page load
+// Load all saved photos on page load
 async function loadPhotos(){
   try {
     const res=await fetch(`${API}/photos`);
     const data=await res.json();
     data.forEach(({slot, url})=>{
-      if(cards[slot]) setCardPhoto(cards[slot], url);
+      if(slot < 6){
+        if(cards[slot]) setCardPhoto(cards[slot], url);
+      } else {
+        createCard(slot, url);
+        if(slot >= nextSlot) nextSlot=slot+1;
+      }
     });
   } catch(e){
     console.log('Could not load photos from server');
