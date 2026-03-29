@@ -134,7 +134,7 @@
 
 <!-- !! IMPORTANT: Replace this with your Render backend URL after deploying !! -->
 <script>
-  const API = 'https://ps-love-backend.onrender.com';
+  const API = 'https://YOUR-RENDER-APP-NAME.onrender.com';
   // Example: const API = 'https://ps-love-backend.onrender.com';
 </script>
 
@@ -191,6 +191,9 @@
   <p class="section-label reveal">Our Memories</p>
   <h2 class="section-title reveal">Our little gallery 📸</h2>
   <div class="gallery-grid" id="galleryGrid"></div>
+  <div style="text-align:center;margin-top:1.5rem;">
+    <button id="addMoreBtn" onclick="addNewCard()" style="background:var(--deep);color:white;border:none;border-radius:100px;padding:0.8rem 2rem;font-family:'DM Sans',sans-serif;font-size:0.9rem;letter-spacing:0.08em;cursor:pointer;transition:background 0.3s,transform 0.15s;touch-action:manipulation;">+ Add More Photos</button>
+  </div>
   <p class="gallery-hint reveal">Tap any frame to add a photo ✨</p>
 </section>
 
@@ -200,18 +203,9 @@
   <h2 class="lovenote-name reveal">My Samruthaa,</h2>
   <div class="heart-divider">🌸</div>
   <p class="lovenote-text reveal">
-    From the moment you came into my life, everything just felt right.<br/>
-    You're not just my girlfriend — you're my calm, my happy place, my home.<br/><br/>
-    I love the way you smile, the way you talk,<br/>
-    even the way you overthink the smallest things —<br/>
-    because that's just you, and I love every bit of you.<br/><br/>
-    Some days I just sit and think about how lucky I am to have you.<br/>
-    You make ordinary moments feel like something out of a dream.<br/><br/>
-    Distance, time, anything — nothing is bigger than what I feel for you.<br/>
-    I'd choose you every single day, in every version of life.<br/><br/>
-    You deserve all the love in the world, Samruthaa.<br/>
-    This little corner of the internet is my way of saying —<br/>
-    you're always on my mind, always in my heart. 💫
+    "Even on your hardest days, you're still the most beautiful part of my world.<br/>
+    No matter what happens, I'm always here for you —<br/>
+    today, tomorrow, always 💫"
   </p>
   <p class="lovenote-sig reveal">— Prashaant</p>
 </section>
@@ -231,7 +225,7 @@
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">P &amp; S 💕</div>
-  <p class="footer-text"></p>
+  <p class="footer-text">Made with love by Prashaant, just for Samruthaa · March 2026</p>
 </footer>
 
 <script>
@@ -277,25 +271,32 @@ function closeMenu(){
   document.body.style.overflow='';
 }
 
-/* ── GALLERY ── */
-const captions=['Us 🌸','My favourite smile 💕','This day ✨','Always & forever 🌹','Just us 💖','Best memory 🌷'];
+/* ── GALLERY (unlimited) ── */
+const defaultCaptions=['Us 🌸','My favourite smile 💕','This day ✨','Always & forever 🌹','Just us 💖','Best memory 🌷'];
+const extraCaptions=['Together 💗','Our world 🌍','Golden moment ✨','Forever 💫','My person 🌹','Always you 💕','Happiness 🌸','Perfect day 🌷'];
 const grid=document.getElementById('galleryGrid');
 const cards=[];
+let nextSlot=0;
 
-// Build 6 empty cards first
-captions.forEach((cap,i)=>{
+function getCaption(i){
+  if(i < defaultCaptions.length) return defaultCaptions[i];
+  return extraCaptions[(i - defaultCaptions.length) % extraCaptions.length];
+}
+
+function createCard(slotIndex, existingUrl=null){
+  const i=slotIndex;
   const card=document.createElement('div'); card.className='photo-card';
+  card.dataset.slot=i;
   card.innerHTML=`
     <input type="file" accept="image/*" id="file-${i}"/>
     <div class="photo-placeholder"><div class="icon">📷</div><p>Tap to add</p></div>
     <div class="upload-hint"><span>+ Add Photo</span></div>
-    <div class="photo-caption">${cap}</div>
+    <div class="photo-caption">${getCaption(i)}</div>
     <button class="delete-btn" title="Remove photo">✕</button>`;
 
   card.addEventListener('touchstart',()=>card.classList.add('touched'),{passive:true});
   card.addEventListener('touchend',()=>setTimeout(()=>card.classList.remove('touched'),1400),{passive:true});
 
-  // Click: open lightbox if has photo, else trigger file picker
   card.addEventListener('click', e=>{
     if(e.target.closest('.delete-btn')) return;
     const img=card.querySelector('img');
@@ -303,7 +304,6 @@ captions.forEach((cap,i)=>{
     card.querySelector('input').click();
   });
 
-  // File chosen → upload to backend
   card.querySelector('input').addEventListener('change', async e=>{
     const file=e.target.files[0]; if(!file) return;
     showLoading(card, true);
@@ -321,22 +321,37 @@ captions.forEach((cap,i)=>{
     }
   });
 
-  // Delete button
   card.querySelector('.delete-btn').addEventListener('click', async e=>{
     e.stopPropagation();
     if(!confirm('Remove this photo?')) return;
     showLoading(card, true);
     try {
       await fetch(`${API}/photos/${i}`, {method:'DELETE'});
-      clearCardPhoto(card);
+      // Remove card from grid entirely
+      card.remove();
+      cards[i]=null;
       showToast('Photo removed 🌸');
     } catch(err){ showToast('Error removing photo'); }
     finally { showLoading(card, false); }
   });
 
   grid.appendChild(card);
-  cards.push(card);
-});
+  cards[i]=card;
+  if(existingUrl) setCardPhoto(card, existingUrl);
+  return card;
+}
+
+// Build first 6 empty cards
+for(let i=0;i<6;i++){ createCard(i); nextSlot=i+1; }
+
+// Add More button handler
+function addNewCard(){
+  const card=createCard(nextSlot);
+  nextSlot++;
+  // Auto-open file picker on the new card
+  card.querySelector('input').click();
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+}
 
 function setCardPhoto(card, url){
   card.querySelector('.photo-placeholder')?.remove();
@@ -344,20 +359,6 @@ function setCardPhoto(card, url){
   let img=card.querySelector('img');
   if(!img){ img=document.createElement('img'); card.prepend(img); }
   img.src=url;
-}
-
-function clearCardPhoto(card){
-  card.querySelector('img')?.remove();
-  if(!card.querySelector('.photo-placeholder')){
-    const ph=document.createElement('div'); ph.className='photo-placeholder';
-    ph.innerHTML='<div class="icon">📷</div><p>Tap to add</p>';
-    card.prepend(ph);
-  }
-  if(!card.querySelector('.upload-hint')){
-    const uh=document.createElement('div'); uh.className='upload-hint';
-    uh.innerHTML='<span>+ Add Photo</span>';
-    card.insertBefore(uh, card.querySelector('.photo-caption'));
-  }
 }
 
 function showLoading(card, show){
@@ -379,7 +380,14 @@ async function loadPhotos(){
     const res=await fetch(`${API}/photos`);
     const data=await res.json();
     data.forEach(({slot, url})=>{
-      if(cards[slot]) setCardPhoto(cards[slot], url);
+      if(slot < 6){
+        // Already created
+        if(cards[slot]) setCardPhoto(cards[slot], url);
+      } else {
+        // Create extra cards for previously added photos
+        createCard(slot, url);
+        if(slot >= nextSlot) nextSlot=slot+1;
+      }
     });
   } catch(e){
     console.log('Could not load photos from server');
